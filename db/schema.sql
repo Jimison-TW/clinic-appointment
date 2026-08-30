@@ -11,7 +11,7 @@ CREATE TABLE departments (
     name        varchar(50) NOT NULL,
     phone       varchar(30),
     address     text,
-    is_deleted  boolean     NOT NULL DEFAULT false,
+    deleted_at  timestamptz,
     created_at  timestamptz NOT NULL DEFAULT now(),
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
@@ -19,7 +19,7 @@ CREATE TABLE departments (
 -- 軟刪除的表，唯一性一律寫在 CREATE TABLE 外面（欄位級 UNIQUE 不能帶 WHERE）
 CREATE UNIQUE INDEX ux_departments_name_active
     ON departments (name)
-    WHERE is_deleted = false;
+    WHERE deleted_at IS NULL;
 
 
 -- ============================================================
@@ -53,13 +53,13 @@ CREATE TABLE doctors(
     description text,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    is_deleted boolean NOT NULL DEFAULT false
+    deleted_at  timestamptz
 );
 
 CREATE INDEX idx_doctors_department_id ON doctors(department_id);
 CREATE UNIQUE INDEX ux_doctors_license_active 
     ON doctors(license) 
-    WHERE is_deleted = false;
+    WHERE deleted_at IS NULL;
 
 -- ============================================================
 -- patients（病患）     ← TODO: 你寫
@@ -77,9 +77,27 @@ CREATE TABLE patients(
     birth_date date,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    is_deleted boolean NOT NULL DEFAULT false
+    deleted_at  timestamptz
 );
 
 CREATE UNIQUE INDEX ux_patients_ic_id_active 
     ON patients(ic_id) 
-    WHERE is_deleted = false;
+    WHERE deleted_at IS NULL;
+
+
+CREATE TABLE refresh_tokens (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id bigint NOT NULL,
+        FOREIGN KEY(user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+    token_hash varchar(64) UNIQUE NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL,
+    revoked_at timestamptz,
+    revoked_reason varchar(50),
+    replaced_by bigint REFERENCES refresh_tokens(id)
+        ON DELETE SET NULL
+);
+
+CREATE INDEX idx_refresh_tokens_user_active ON refresh_tokens (user_id) WHERE revoked_at IS NULL;
