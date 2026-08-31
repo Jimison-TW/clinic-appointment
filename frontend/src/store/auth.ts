@@ -112,6 +112,14 @@ export const useAuthStore = defineStore('auth', {
         this.refreshToken = res.refreshToken
         localStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken)
       }
+
+      // ⚠️ 拿到一份新的 session 就等於「還原完成了」。
+      //    少了這一行的話：login() 成功後 restored 還是 false，
+      //    緊接著 router.push 觸發導覽守衛，守衛看到 !restored 就去跑 restore()，
+      //    restore() 看到 refreshToken 有值 -> 又打一次 /refresh。
+      //    等於每次登入都白白多一趟 round trip、多燒掉一次 token 輪替。
+      //    （在 e2e 的網路 log 裡就是 login 200 後面緊跟著一個沒必要的 refresh 200。）
+      this.restored = true
     },
 
     async login(account: string, password: string) {
