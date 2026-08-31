@@ -10,6 +10,8 @@ declare module 'vue-router' {
     public?: boolean
     /** 允許進入的角色。沒寫 = 登入即可。 */
     roles?: UserRole[]
+    /** 顯示在導覽列的名稱。沒寫 = 不出現在導覽列。 */
+    title?: string
   }
 }
 
@@ -27,11 +29,13 @@ const routes: RouteRecordRaw[] = [
     path: '/schedule',
     name: 'schedule',
     component: () => import('../views/schedule/ScheduleView.vue'),
+    meta: { title: '醫師班表' },
   },
   {
     path: '/booking',
     name: 'booking',
     component: () => import('../views/booking/BookingView.vue'),
+    meta: { title: '預約' },
   },
   {
     path: '/admin',
@@ -40,7 +44,7 @@ const routes: RouteRecordRaw[] = [
     // ⚠️ 原本這裡寫 roles: ['receptionist']，但後端註冊只會發 'patient'、
     //    也沒有任何地方會發 'receptionist' —— 這個頁面等於誰都進不去。
     //    現在對齊後端 Auth/Roles.cs 的 Admin，跟 [Authorize(Roles = "admin")] 一致。
-    meta: { roles: ['admin'] },
+    meta: { title: '後台管理', roles: ['admin'] },
   },
 ]
 
