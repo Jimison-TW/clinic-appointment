@@ -8,7 +8,7 @@ public class User
     public string Name { get; set; } = null!;
     public string Account { get; set; } = null!;
     public string PasswordHash { get; set; } = null!;
-    public string Role { get; set; } = null!;   // admin / doctor / patient / staff
+    public string Role { get; set; } = null!;   // 取值只能來自 Auth/Roles.cs
 
     public bool IsActive { get; set; }
     public short TryCount { get; set; }         // smallint

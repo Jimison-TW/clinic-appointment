@@ -43,7 +43,10 @@ public class AuthController : ControllerBase
             // BCrypt 自帶 salt：同一個密碼每次 hash 出來都不一樣，防彩虹表。
             // 預設 work factor 11 -> 單次驗證約 100ms，這個「慢」是故意的。
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
-            Role = "patient",        // ← 寫死。永遠不從 request 拿。
+            // ← 寫死成常數。永遠不從 request 拿，也不用字面字串。
+            //   自助註冊唯一能拿到的角色就是病患；要當 doctor/receptionist/admin
+            //   只能由已登入的 admin 走另一支端點指派。
+            Role = Roles.Patient,
             IsActive = true,
         };
 
@@ -209,6 +212,6 @@ public class AuthController : ControllerBase
         var expiresAt = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenMinutes);
 
         await Task.CompletedTask;
-        return new AuthResponse(accessToken, raw, expiresAt);
+        return new AuthResponse(accessToken, raw, expiresAt, user.Id, user.Name, user.Role);
     }
 }
