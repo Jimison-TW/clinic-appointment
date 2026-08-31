@@ -30,7 +30,11 @@ public class AuthController : ControllerBase
     // POST /api/auth/register
     // ================================================================
     [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest req)
+    // ⚠️ 回傳型別從 IActionResult 改成 ActionResult<T>。
+    //    IActionResult 對 Swashbuckle 來說等於「我不告訴你我回什麼」，
+    //    產出的 OpenAPI 沒有 response schema，orval 就只能生 Promise<void>，
+    //    前端拿到的東西完全沒有型別 —— 等於白裝 orval。
+    public async Task<ActionResult<RegisterResponse>> Register(RegisterRequest req)
     {
         var exists = await _db.Users.AnyAsync(u => u.Account == req.Account);
         if (exists)
@@ -53,7 +57,7 @@ public class AuthController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(Me), new { }, new { user.Id, user.Account, user.Name });
+        return CreatedAtAction(nameof(Me), new { }, new RegisterResponse(user.Id, user.Account, user.Name));
     }
 
     // ================================================================
@@ -167,7 +171,7 @@ public class AuthController : ControllerBase
     // ================================================================
     [HttpGet("me")]
     [Authorize]
-    public async Task<IActionResult> Me()
+    public async Task<ActionResult<MeResponse>> Me()
     {
         // 因為 Program.cs 清掉了 DefaultInboundClaimTypeMap，
         // 這裡才找得到原始的 "sub"（否則它會被改寫成一長串微軟 URI）。
@@ -177,7 +181,7 @@ public class AuthController : ControllerBase
 
         var user = await _db.Users
             .Where(u => u.Id == userId)
-            .Select(u => new { u.Id, u.Account, u.Name, u.Role, u.LastLoginAt })
+            .Select(u => new MeResponse(u.Id, u.Account, u.Name, u.Role, u.LastLoginAt))
             .SingleOrDefaultAsync();
 
         return user is null ? Unauthorized() : Ok(user);

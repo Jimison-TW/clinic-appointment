@@ -38,3 +38,15 @@ public record AuthResponse(
     long UserId,
     string Name,
     string Role);
+
+/// <summary>註冊成功的回應。</summary>
+public record RegisterResponse(long Id, string Account, string Name);
+
+/// <summary>GET /api/auth/me 的回應。</summary>
+public record MeResponse(long Id, string Account, string Name, string Role, DateTime? LastLoginAt);
+
+/// <summary>
+/// 後台的帳號清單一列。
+/// ⚠️ 刻意不含 PasswordHash —— 直接回 User 實體會把 hash 一起序列化出去。
+/// </summary>
+public record AdminUserRow(long Id, string Account, string Name, string Role, bool IsActive, DateTime? LastLoginAt);

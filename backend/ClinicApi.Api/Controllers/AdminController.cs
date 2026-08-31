@@ -1,5 +1,6 @@
 using ClinicApi.Api.Auth;
 using ClinicApi.Api.Data;
+using ClinicApi.Api.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -29,21 +30,14 @@ public class AdminController : ControllerBase
 
     /// <summary>GET /api/admin/users — 全院帳號清單。只有 admin 看得到。</summary>
     [HttpGet("users")]
-    public async Task<IActionResult> ListUsers()
+    public async Task<ActionResult<List<AdminUserRow>>> ListUsers()
     {
         // ⚠️ 用 Select 投影出 DTO，不要直接回 User 實體。
         //    直接回實體會把 PasswordHash 也序列化出去。
         var users = await _db.Users
             .OrderBy(u => u.Id)
-            .Select(u => new
-            {
-                u.Id,
-                u.Account,
-                u.Name,
-                u.Role,
-                u.IsActive,
-                u.LastLoginAt,
-            })
+            .Select(u => new AdminUserRow(
+                u.Id, u.Account, u.Name, u.Role, u.IsActive, u.LastLoginAt))
             .ToListAsync();
 
         return Ok(users);

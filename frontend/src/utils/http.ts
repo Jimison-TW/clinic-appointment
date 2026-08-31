@@ -1,9 +1,19 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  AxiosError,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { useAuthStore } from '../store/auth'
 import router from '../router'
 
-const http = axios.create({
-  baseURL: '/api',
+// ⚠️ 關掉 vite proxy 之後，baseURL 必須是絕對位址。
+//    原本寫 '/api' 是靠 proxy 幫忙補上 host —— 現在沒有 proxy 了，
+//    '/api' 會變成打 http://localhost:5173/api（Vite 自己），回 404 的 index.html。
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5080'
+
+export const http = axios.create({
+  baseURL: API_BASE_URL,
   timeout: 10000,
 })
 
@@ -60,4 +70,16 @@ http.interceptors.response.use(
   },
 )
 
-export default http
+// ---------------------------------------------------------------
+// orval 的 mutator：產生出來的每一支 API 都會呼叫這個 default export。
+//
+// ⚠️ 為什麼要包一層，不能直接 export default http（axios 實例）：
+//    直接呼叫 axios 實例回傳的是 Promise<AxiosResponse<T>>（外面包一層信封），
+//    但 orval 產生的型別假設是 Promise<T>（直接就是 body）。
+//    不拆掉 .data 的話，型別會對不上，而且每個呼叫端都要多寫一次 .data。
+//    在這裡拆一次，全站都乾淨。
+//
+//    前端對應物：這就是 fetch 的 res.json() —— 把信封拆開只留內容物。
+// ---------------------------------------------------------------
+export default <T>(config: AxiosRequestConfig): Promise<T> =>
+  http<T, AxiosResponse<T>>(config).then((res) => res.data)
