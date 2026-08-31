@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using ClinicApi.Api.Auth;
 using ClinicApi.Api.Data;
@@ -7,11 +6,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-
-// ⚠️ 坑 #1：預設 .NET 會把 JWT 的短名稱 claim 改寫成一長串微軟 URI，
-//    例如 "sub" -> "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
-//    結果你在 Controller 找 "sub" 永遠找不到。清掉這張對照表，維持原樣。
-JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,6 +49,17 @@ builder.Services
             RoleClaimType = "role",
         };
 
+        // ⚠️ 坑 #1：預設 .NET 會把 JWT 的短名稱 claim 改寫成一長串微軟 URI，
+        //    "sub" -> "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+        //    結果你在 Controller 找 User.FindFirstValue("sub") 永遠拿到 null。
+        //    關掉這個改寫，claim 名稱維持 token 裡的原樣。
+        //
+        //    ⚠️ 網路上很多文章教你寫
+        //        JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+        //      那是 .NET 7 以前的做法。.NET 8 的 JwtBearer 改用 JsonWebTokenHandler，
+        //      它有自己的一張對照表，清舊的那張完全沒有作用（而且不會有任何錯誤訊息）。
+        //      MapInboundClaims = false 才是 .NET 8 的正解。
+        options.MapInboundClaims = false;
     });
 
 // ---------- 授權（你能做什麼）----------
