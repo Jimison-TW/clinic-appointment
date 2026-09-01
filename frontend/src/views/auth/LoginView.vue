@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { AxiosError } from 'axios'
 import { useAuthStore } from '../../store/auth'
+import { API_BASE_URL } from '../../api/authClient'
 
 const router = useRouter()
 const route = useRoute()
@@ -29,7 +30,16 @@ async function handleSubmit() {
     //    沒有 response = 連不上 / CORS 被擋（使用者重打一百次也沒用）
     //    其他        = 伺服器爆了
     if (error instanceof AxiosError && !error.response) {
-      ElMessage.error('連不上伺服器（可能是後端沒開，或 CORS 沒放行）')
+      // ⚠️ 沒有 response = 瀏覽器根本沒把回應交給我們。兩種可能：後端沒開，或 CORS 沒過。
+      //    把「我是誰」跟「我打去哪」直接印在畫面上 ——
+      //    實際踩過的坑：Vite 的 5173 被占用時會「安靜地」換到 5174，
+      //    網址列那個數字太容易忽略，而後端白名單只有 5173，
+      //    於是每個請求都被擋，但錯誤訊息只寫 CORS，完全看不出是 port 換掉了。
+      //    印出 origin 就能一眼比對它跟後端白名單是不是逐字相同。
+      ElMessage.error(
+        `連不上伺服器：${window.location.origin} → ${API_BASE_URL}\n` +
+          `請確認 ① 後端有開 ② 這個 origin 在後端 CORS 白名單內`,
+      )
     } else if (error instanceof AxiosError && error.response?.status === 401) {
       ElMessage.error('登入失敗，請確認帳號密碼')
     } else {
