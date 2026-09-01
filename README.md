@@ -1,7 +1,55 @@
 # 診所預約管理系統
 
-一套從資料庫設計開始、不依賴自動 CRUD 框架、逐層手工打造的全端練習專案。
+由前端轉向後端的資料庫與系統設計練習專案
 後端 ASP.NET Core 8 + PostgreSQL，前端 Vue 3。
+目前僅提供local端執行啟動，後續完成後再部署到CloudFlare Page
+
+---
+
+## 快速開始（clone 下來在本機跑起來）
+
+需求：.NET SDK 8.0、Node.js 20+、PostgreSQL 16。
+
+```bash
+# 1. 取得原始碼（完整功能在 test 分支）
+git clone -b test git@github.com:Jimison-TW/clinic-appointment.git
+cd clinic-appointment
+
+# 2. 建資料庫
+createdb clinic
+
+# 3. 後端
+cd backend/ClinicApi.Api
+dotnet tool install --global dotnet-ef --version 8.*        # 只需一次
+dotnet user-secrets set "Jwt:Key" "$(openssl rand -base64 48)"
+dotnet user-secrets set "ConnectionStrings:ClinicDb" \
+  "Host=localhost;Port=5432;Database=clinic;Username=<你的 PostgreSQL 帳號>"
+dotnet ef database update
+dotnet run --launch-profile https                            # 開著別關
+
+# 4. 前端（另開一個終端機，從 repo 根目錄出發）
+cd frontend
+npm install
+npm run dev
+```
+
+開 <http://localhost:5173> 會看到登入頁。
+⚠️ **前端目前沒有註冊頁**（只有登入），第一個帳號要用 `curl` 打後端的 `/api/auth/register` 建立，
+請照下面「[建立測試帳號](#4-建立測試帳號)」操作 —— 那一段同時也會把角色改成 `admin`，
+才看得到「後台管理」選單。
+
+幾個 clone 下來一定會遇到的點：
+
+- **分支**：`main` 還停在資料庫設計階段，認證授權那條線在 `test`。直接 `git clone` 不加 `-b test` 會看不到成果。
+- **連線字串**：`appsettings.json` 裡寫的是開發者本機的帳號（`Username=fish`）。用上面的 `dotnet user-secrets` 覆蓋掉即可，**不用改動版控裡的檔案**（user-secrets 的優先序高於 `appsettings.json`）。
+- **JWT 金鑰**沒設定的話後端會直接啟動失敗並提示指令 —— 這是刻意的，金鑰不進版控。
+- **不需要跑 `npm run api:gen`**：orval 產生的 TypeScript client 已經進版控。只有在後端 DTO 改動後才需要重跑，而且重跑時後端必須是開著的。
+- 網址請用 `localhost` 而不是 `127.0.0.1`（原因見下方「前端」一節）。
+
+**只想看 API、不想跑前端**：做完步驟 1–3 就好，直接開 Swagger UI <https://localhost:7101/swagger>，
+用 `/api/auth/register` → `/api/auth/login` 拿 token，按右上角 Authorize 貼上後即可打需要授權的端點。
+
+詳細說明與逐步解釋見下方「[本機執行](#本機執行)」。
 
 ---
 
@@ -54,49 +102,6 @@
             └────── Swagger / OpenAPI ────│ PostgreSQL 16│
                                           └──────────────┘
 ```
-
----
-
-## 認證授權怎麼運作
-
-### 兩張 token，職責不同
-
-| | Access Token | Refresh Token |
-|---|---|---|
-| 形式 | JWT（無狀態，伺服器不儲存） | 隨機亂數，資料庫只存 SHA-256 雜湊 |
-| 壽命 | 15 分鐘 | 30 天 |
-| 存放 | 前端**記憶體**（不進 localStorage） | 前端 localStorage（見下方「已知限制」） |
-| 用途 | 每個請求的 `Authorization: Bearer` | 換一張新的 access token |
-
-Access token 放記憶體的理由：localStorage 是同源任何 JS 都讀得到的空間，
-token 被竊取後可以離線使用；放記憶體則需要攻擊者在使用者仍開著分頁時才取得。
-代價是重新整理會遺失，因此開機時會用 refresh token 靜默換回一張。
-
-### Token 輪替與重放偵測
-
-每次 `/refresh` 都會把舊的 refresh token 標記為 `rotated` 並發一張新的。
-若一張已作廢的 token 再次出現，視為外洩訊號，撤銷該使用者所有有效 token 並要求重新登入。
-
-### 401 自動 refresh 與併發收斂
-
-前端 axios 攔截器在收到 `401` 時自動換 token 並重送原請求（`403` 不觸發 —— 那是角色不足，換 token 無效）。
-
-多個請求同時 401 時，若各自發起 refresh，第二個之後帶的都是已被輪替的舊 token，
-會**觸發後端的重放偵測而導致使用者被強制登出**。因此攔截器做三層收斂：
-
-1. **單一飛行** — 共用同一個 refresh Promise，後到的請求排隊等待
-2. **請求閘門** — refresh 進行期間，新請求先等待，不帶已知失效的 token 出門
-3. **版本戳記** — 401 返回時若 token 已被其他請求換新，直接重送而不重複 refresh
-
-實測：5 個併發請求同時 401，只送出 1 次 `/refresh`。
-
-### 前後端雙重角色檢查
-
-前端路由守衛依角色決定選單與可進入的頁面，但**它只負責使用者體驗，不是安全機制** ——
-前端程式碼在使用者的瀏覽器中，可被任意修改。
-
-真正的防線是後端的 `[Authorize(Roles = "admin")]`，它比對的是**經簽章驗證後**的 JWT role claim。
-即使前端狀態被竄改而進入後台頁面，API 仍會回 `403`，畫面拿不到任何資料。
 
 ---
 
@@ -156,6 +161,8 @@ dotnet tool install --global dotnet-ef --version 8.*
 # 設定 JWT 簽章金鑰（存在 user-secrets，不會進版控）
 dotnet user-secrets set "Jwt:Key" "$(openssl rand -base64 48)"
 
+# 設定資料庫連線字串（見下方 ⚠️，要在 migration 之前設好）
+
 # 套用 migration
 dotnet ef database update
 
@@ -166,16 +173,26 @@ dotnet run --launch-profile https
 - HTTP（前端呼叫的位址）：<http://localhost:5080>
 
 ⚠️ 連線字串位於 `appsettings.json` 的 `ConnectionStrings:ClinicDb`，
-目前寫的是開發者本機的帳號（`Username=fish`），請改成你自己的 PostgreSQL 使用者。
-（外部化為環境變數是待辦事項之一。）
+目前寫的是開發者本機的帳號（`Username=fish`）。請改成你自己的 PostgreSQL 使用者 ——
+建議用 user-secrets 覆蓋，不要動到版控裡的檔案：
+
+```bash
+dotnet user-secrets set "ConnectionStrings:ClinicDb" \
+  "Host=localhost;Port=5432;Database=clinic;Username=<你的帳號>"
+```
+
+（Development 環境下 user-secrets 的優先序高於 `appsettings.json`。
+真正外部化為環境變數仍是待辦事項之一。）
 
 ### 3. 前端
 
 ```bash
 cd frontend
 npm install
-npm run api:gen     # 從後端 Swagger 產生 TypeScript client（需後端已啟動）
 npm run dev
+
+# 只有在後端 DTO 改動後才需要重跑（產生的 client 已進版控，且重跑時後端必須開著）
+npm run api:gen     # 從後端 Swagger 產生 TypeScript client
 ```
 
 開啟 <http://localhost:5173>
@@ -185,8 +202,9 @@ npm run dev
 
 ### 4. 建立測試帳號
 
-註冊端點只會發給 `patient` 角色（刻意設計，避免 over-posting）。
-第一個管理員需要以 SQL 建立：
+⚠️ 前端還沒有註冊頁，所以帳號一律從 API 建立。
+註冊端點只會發給 `patient` 角色（刻意設計，避免 over-posting），
+因此第一個管理員需要註冊完再以 SQL 改角色：
 
 ```bash
 curl -X POST http://localhost:5080/api/auth/register \
@@ -210,6 +228,8 @@ psql -d clinic -c "update users set role='admin' where account='admin1';"
   已簽發的 access token 會持續有效至過期（最長 15 分鐘）。
 - 連線字串與 CORS 允許來源目前寫在 `appsettings.json` / `Program.cs`，尚未外部化為環境變數，
   因此還不具備直接部署的條件。
+- **前端沒有註冊頁面**：後端的 `POST /api/auth/register` 已完成、orval 也產好了 client，
+  但登入頁只有「登入」按鈕，沒有導向註冊的入口。目前只能用 `curl` 或 Swagger 建帳號。
 - 尚無自動化測試與 CI。
 - 尚未部署。
 
