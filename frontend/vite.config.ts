@@ -17,6 +17,11 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
+    // ⚠️ 沒有 strictPort 的話，5173 被占用時 Vite 會「安靜地」改用 5174，
+    //    而後端的 CORS 白名單只有 5173 -> 前端每一個請求都被擋，
+    //    你卻只會看到 CORS 紅字，不會意識到自己開在別的 port。
+    //    寧可啟動就失敗，也不要拿一個註定被擋的 port 繼續跑。
+    strictPort: true,
     // ⚠️ 這裡原本有一段 server.proxy 把 /api 轉去後端。
     //    proxy 的效果是：瀏覽器以為自己只在打 localhost:5173（同源），
     //    真正的跨網域發生在 Vite 的 node 程序裡 —— 而 node 沒有同源政策。

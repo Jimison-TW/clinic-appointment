@@ -84,7 +84,13 @@ const string FrontendCors = "frontend";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCors, policy => policy
-        .WithOrigins("http://localhost:5173")   // Vite dev server
+        // ⚠️ 對瀏覽器來說 localhost 和 127.0.0.1 是「兩個不同的 origin」，
+        //    即使它們指向同一台機器。只放行其中一個的話，
+        //    同事用另一個網址開就會拿到 CORS 錯誤，而且錯誤訊息完全不會提示你是這個原因。
+        //    開發環境兩個都放行；正式環境只會有一個真實網域，不會有這個問題。
+        .WithOrigins(
+            "http://localhost:5173",     // Vite dev server
+            "http://127.0.0.1:5173")
         .AllowAnyHeader()
         .AllowAnyMethod());
 });
